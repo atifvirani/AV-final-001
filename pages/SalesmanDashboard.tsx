@@ -18,7 +18,6 @@ import {
   Info,
   ArrowRight,
   ShieldCheck,
-  // Added FileText and Printer imports to fix "Cannot find name" errors
   FileText,
   Printer
 } from 'lucide-react';
@@ -57,9 +56,21 @@ const SalesmanDashboard: React.FC<SalesmanDashboardProps> = ({ salesmanId, onLog
     const userSales = await db.sales.where('salesmanId').equals(salesmanId).toArray();
     const sorted = userSales.sort((a, b) => b.date.getTime() - a.date.getTime());
     setSales(sorted);
-    const total = userSales.reduce((acc, s) => acc + s.totalAmount, 0);
+    
+    // DASHBOARD FILTER: Sum only TODAY'S sales
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const todaysSales = userSales.filter(s => {
+      const saleDate = new Date(s.date);
+      saleDate.setHours(0, 0, 0, 0);
+      return saleDate.getTime() === today.getTime();
+    });
+
+    const total = todaysSales.reduce((acc, s) => acc + s.totalAmount, 0);
     const pending = userSales.filter(s => !s.synced).length;
-    setStats({ total, count: userSales.length, pending });
+    
+    setStats({ total, count: todaysSales.length, pending });
   };
 
   const loadProducts = async () => {
@@ -144,11 +155,11 @@ const SalesmanDashboard: React.FC<SalesmanDashboardProps> = ({ salesmanId, onLog
                 <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:scale-110 transition-transform">
                   <CheckCircle className="h-20 w-20 text-blue-500" />
                 </div>
-                <div className={`${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'} text-xs font-black uppercase tracking-[0.2em] mb-2`}>Shift Revenue</div>
+                <div className={`${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'} text-xs font-black uppercase tracking-[0.2em] mb-2`}>Today's Revenue</div>
                 <div className={`text-4xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-900'} tracking-tighter`}>₹{stats.total.toLocaleString()}</div>
                 <div className="mt-4 flex items-center space-x-2">
                    <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${stats.pending === 0 ? 'bg-green-500/10 text-green-500' : 'bg-orange-500/10 text-orange-500'}`}>
-                     {stats.pending === 0 ? 'Synced' : `${stats.pending} Pending`}
+                     {stats.pending === 0 ? 'Synced' : `${stats.pending} Pending Sync`}
                    </div>
                 </div>
               </div>
@@ -157,7 +168,7 @@ const SalesmanDashboard: React.FC<SalesmanDashboardProps> = ({ salesmanId, onLog
                 <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:scale-110 transition-transform">
                   <FileText className="h-20 w-20 text-indigo-500" />
                 </div>
-                <div className={`${theme === 'dark' ? 'text-indigo-400' : 'text-indigo-600'} text-xs font-black uppercase tracking-[0.2em] mb-2`}>Invoices Issued</div>
+                <div className={`${theme === 'dark' ? 'text-indigo-400' : 'text-indigo-600'} text-xs font-black uppercase tracking-[0.2em] mb-2`}>Today's Invoices</div>
                 <div className={`text-4xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-900'} tracking-tighter`}>{stats.count}</div>
                 <p className="text-xs text-slate-500 mt-4 font-bold uppercase tracking-widest">Active Shift Terminal</p>
               </div>
@@ -389,24 +400,46 @@ const SalesmanDashboard: React.FC<SalesmanDashboardProps> = ({ salesmanId, onLog
         <div className="fixed inset-0 bg-white dark:bg-slate-900 z-[300] flex flex-col items-center p-12 overflow-y-auto animate-in zoom-in-95 duration-300">
           <div id="thermal-receipt" className="p-8 bg-white text-black text-center w-[80mm] mx-auto border border-slate-200 shadow-2xl mb-10 rounded-xl">
              <h1 className="text-3xl font-black mb-1 uppercase tracking-tighter">AV STORE</h1>
-             <p className="text-[11px] mb-6 font-bold uppercase tracking-widest text-gray-600 font-sans">Professional ERP Output</p>
+             <p className="text-[11px] mb-6 font-bold uppercase tracking-widest text-gray-600 font-sans text-center">Professional ERP Output</p>
              <div className="text-left text-[12px] space-y-2 mb-6 border-t border-b border-black border-dashed py-4 font-mono font-bold">
                 <div className="flex justify-between"><span>INV NO:</span> <b>#{reprintSale.invoiceNumber}</b></div>
                 <div className="flex justify-between"><span>DATE:</span> <span>{new Date(reprintSale.date).toLocaleString()}</span></div>
                 <div className="flex justify-between"><span>TERMINAL:</span> <span>{reprintSale.salesmanId}</span></div>
                 <div className="flex justify-between"><span>CLIENT:</span> <b>{reprintSale.customerName}</b></div>
              </div>
-             <div className="text-left text-[12px] space-y-3 mb-6 font-mono">
-               {reprintSale.items.map((it, i) => (
-                 <div key={i} className="flex justify-between items-start border-b border-gray-100 pb-1 last:border-0 font-bold">
-                    <span className="flex-1">{it.productName} ({it.type}) x{it.quantity}</span>
-                    <span className="ml-4">₹{it.total}</span>
-                 </div>
-               ))}
-             </div>
-             <div className="border-t border-black border-dashed pt-4 flex justify-between items-end mb-6">
-                <span className="font-black text-sm uppercase tracking-widest">GRAND TOTAL</span>
-                <span className="font-black text-2xl tracking-tighter">₹{reprintSale.totalAmount}</span>
+             
+             {/* GRIDDED REPRINT TABLE */}
+             <table className="receipt-table" style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid black', marginBottom: '10px' }}>
+                <thead>
+                  <tr>
+                    <th style={{ border: '1px solid black', padding: '4px', textAlign: 'left', fontSize: '11px' }}>Item</th>
+                    <th style={{ border: '1px solid black', padding: '4px', textAlign: 'left', fontSize: '11px' }}>Qty</th>
+                    <th style={{ border: '1px solid black', padding: '4px', textAlign: 'left', fontSize: '11px' }}>Total</th>
+                  </tr>
+                </thead>
+                {/* Fixed invalid CSS property fontMono with fontFamily */}
+                <tbody style={{ fontFamily: 'monospace' }}>
+                  {reprintSale.items.map((it, i) => (
+                    <tr key={i}>
+                      <td style={{ border: '1px solid black', padding: '4px', fontSize: '11px' }}>{it.productName} ({it.type})</td>
+                      <td style={{ border: '1px solid black', padding: '4px', fontSize: '11px' }}>{it.quantity}</td>
+                      <td style={{ border: '1px solid black', padding: '4px', fontSize: '11px' }}>₹{it.total}</td>
+                    </tr>
+                  ))}
+                </tbody>
+             </table>
+
+             <div className="border-t border-black border-dashed pt-4 flex flex-col items-end mb-6 space-y-1">
+                {reprintSale.discount > 0 && (
+                  <div className="flex justify-between w-full text-[10px] font-bold font-mono">
+                    <span>Discount:</span>
+                    <span>-₹{reprintSale.discount}</span>
+                  </div>
+                )}
+                <div className="flex justify-between w-full pt-1">
+                  <span className="font-black text-sm uppercase tracking-widest">GRAND TOTAL</span>
+                  <span className="font-black text-2xl tracking-tighter">₹{reprintSale.totalAmount}</span>
+                </div>
              </div>
              <p className="text-[9px] text-gray-500 italic font-bold">Thank you for your business. (Archive Copy)</p>
           </div>

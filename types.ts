@@ -39,6 +39,7 @@ export interface Sale {
   date: Date;
   items: SaleItem[];
   totalAmount: number;
+  discount: number; // Applied discount in ₹
   synced: boolean;
   syncId?: string;
 }

@@ -2,13 +2,14 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../db';
 import { Customer, Product, SaleItem, Sale } from '../../types';
-import { Search, ShoppingCart, Trash2, X, Delete, Info, Printer } from 'lucide-react';
+import { Search, ShoppingCart, Trash2, X, Delete, Info, Printer, Percent } from 'lucide-react';
 
 const BillingPage: React.FC<{ salesmanId: string; onComplete: () => void }> = ({ salesmanId, onComplete }) => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [cart, setCart] = useState<SaleItem[]>([]);
+  const [discount, setDiscount] = useState<number>(0);
   const [showPrint, setShowPrint] = useState<Sale | null>(null);
   
   const [isRegistering, setIsRegistering] = useState(false);
@@ -74,13 +75,21 @@ const BillingPage: React.FC<{ salesmanId: string; onComplete: () => void }> = ({
     return (charCode - 64) * 10000;
   };
 
+  const subtotal = cart.reduce((a, b) => a + b.total, 0);
+  const grandTotal = Math.max(0, subtotal - discount);
+
   const finalizeSale = async () => {
     if (!selectedCustomer || !cart.length) return;
     
     try {
       const last = await db.sales.where('salesmanId').equals(salesmanId).last();
       const baseRange = getBaseInvoice(salesmanId);
-      const invoiceNumber = last ? (parseInt(last.invoiceNumber) + 1).toString() : (baseRange + 1).toString();
+      
+      // Safety: find max invoice number even if reset occurs
+      const allUserSales = await db.sales.where('salesmanId').equals(salesmanId).toArray();
+      const maxInv = allUserSales.reduce((max, s) => Math.max(max, parseInt(s.invoiceNumber)), baseRange);
+      const invoiceNumber = (maxInv + 1).toString();
+      
       const syncId = `${salesmanId}_${invoiceNumber}_${Date.now()}`;
       
       const sale: Sale = {
@@ -90,7 +99,8 @@ const BillingPage: React.FC<{ salesmanId: string; onComplete: () => void }> = ({
         salesmanId,
         date: new Date(),
         items: cart,
-        totalAmount: cart.reduce((a, b) => a + b.total, 0),
+        discount: discount,
+        totalAmount: grandTotal,
         synced: false,
         syncId
       };
@@ -100,11 +110,13 @@ const BillingPage: React.FC<{ salesmanId: string; onComplete: () => void }> = ({
         for (const item of cart) {
           const p = await db.products.get(item.productId);
           if (p) {
-            await db.products.update(item.productId, { stockLevel: p.stockLevel - item.quantity });
+            // STOCK MATH FIX: 0.5kg packets deduct half a unit of stock weight (if stock is in KG)
+            const weightToSubtract = item.type === '1kg' ? item.quantity : item.quantity * 0.5;
+            await db.products.update(item.productId, { stockLevel: p.stockLevel - weightToSubtract });
             await db.stockLogs.add({
               productId: item.productId,
               productName: item.productName,
-              change: -item.quantity,
+              change: -weightToSubtract,
               date: new Date(),
               reason: `Sale #${invoiceNumber}`
             });
@@ -132,7 +144,18 @@ const BillingPage: React.FC<{ salesmanId: string; onComplete: () => void }> = ({
             padding: 5mm;
             font-family: 'Courier New', monospace;
             color: black;
-            border: 1px solid #eee;
+          }
+          .receipt-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1px solid black;
+            margin: 10px 0;
+          }
+          .receipt-table th, .receipt-table td {
+            border: 1px solid black;
+            padding: 4px;
+            text-align: left;
+            font-size: 11px;
           }
           @page { size: 80mm auto; margin: 0; }
         }
@@ -200,12 +223,33 @@ const BillingPage: React.FC<{ salesmanId: string; onComplete: () => void }> = ({
 
       <div className="pt-8 border-t-2 border-slate-50 space-y-6">
         <button onClick={() => setShowProductSearch(true)} className="w-full py-6 bg-slate-900 text-white rounded-[2rem] font-black text-xl shadow-2xl hover:bg-black transition-all active:scale-95 uppercase tracking-widest">+ ADD TO ORDER</button>
+        
+        {/* DISCOUNT FIELD */}
+        <div className="relative">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block ml-4">Adjustment Discount (₹)</label>
+          <div className="relative">
+            <div className="absolute left-5 top-4 text-blue-500">
+               <Percent className="h-5 w-5" />
+            </div>
+            <input 
+              type="number"
+              placeholder="0"
+              className="w-full pl-14 pr-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-blue-500 text-slate-800 font-black"
+              value={discount || ''}
+              onChange={e => setDiscount(Math.max(0, parseInt(e.target.value) || 0))}
+            />
+          </div>
+        </div>
+
         <div className="flex justify-between items-end px-4">
           <div>
              <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Total Order Value</p>
              <div className="h-1.5 w-12 bg-blue-600 rounded-full"></div>
           </div>
-          <p className="text-6xl font-black text-slate-900 tracking-tighter transition-all">₹{cart.reduce((a, b) => a + b.total, 0)}</p>
+          <div className="text-right">
+             {discount > 0 && <p className="text-sm text-slate-400 line-through">₹{subtotal}</p>}
+             <p className="text-6xl font-black text-slate-900 tracking-tighter transition-all">₹{grandTotal}</p>
+          </div>
         </div>
         <button onClick={finalizeSale} disabled={!selectedCustomer || !cart.length} className="w-full py-7 bg-blue-600 disabled:bg-slate-100 disabled:text-slate-300 text-white rounded-[2.5rem] font-black text-2xl shadow-2xl shadow-blue-400 disabled:shadow-none transition-all active:scale-[0.98] uppercase tracking-[0.1em]">GENERATE BILL</button>
       </div>
@@ -277,27 +321,51 @@ const BillingPage: React.FC<{ salesmanId: string; onComplete: () => void }> = ({
           <div id="thermal-receipt" className="p-10 bg-white text-black text-center w-[80mm] mx-auto border border-slate-200 shadow-2xl mb-12 rounded-2xl">
             <h1 className="text-4xl font-black mb-1 uppercase tracking-tighter">AV STORE</h1>
             <p className="text-[11px] mb-8 font-black uppercase tracking-[0.3em] text-gray-500">Official Terminal Receipt</p>
-            <div className="text-left text-[12px] space-y-3 mb-8 border-t-2 border-b-2 border-black border-dashed py-6 font-mono font-bold leading-relaxed">
+            <div className="text-left text-[12px] space-y-3 mb-6 border-t-2 border-b-2 border-black border-dashed py-6 font-mono font-bold leading-relaxed">
               <div className="flex justify-between uppercase tracking-widest text-[10px]"><span>Invoice No:</span> <b>#{showPrint.invoiceNumber}</b></div>
               <div className="flex justify-between uppercase tracking-widest text-[10px]"><span>Timestamp:</span> <span>{new Date(showPrint.date).toLocaleString()}</span></div>
-              <div className="flex justify-between uppercase tracking-widest text-[10px]"><span>Terminal:</span> <span>{showPrint.salesmanId}</span></div>
               <div className="flex justify-between uppercase tracking-widest text-[10px]"><span>Customer:</span> <b>{showPrint.customerName}</b></div>
             </div>
-            <div className="text-left text-[13px] space-y-4 mb-8 font-mono">
-              {showPrint.items.map((it, i) => (
-                <div key={i} className="flex justify-between items-start border-b border-gray-100 pb-2 last:border-0">
-                  <span className="flex-1 font-black uppercase tracking-tight text-[11px]">{it.productName} ({it.type}) x{it.quantity}</span>
-                  <span className="ml-6 font-black text-lg">₹{it.total}</span>
+            
+            {/* GRIDDED RECEIPT TABLE */}
+            <table className="receipt-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Qty</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {showPrint.items.map((it, i) => (
+                  <tr key={i}>
+                    <td>{it.productName} ({it.type})</td>
+                    <td>{it.quantity}</td>
+                    <td>₹{it.total}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <div className="border-t-2 border-black border-dashed pt-4 flex flex-col items-end mb-8 space-y-1">
+              <div className="flex justify-between w-full text-xs font-bold font-mono">
+                <span>Subtotal:</span>
+                <span>₹{showPrint.items.reduce((a, b) => a + b.total, 0)}</span>
+              </div>
+              {showPrint.discount > 0 && (
+                <div className="flex justify-between w-full text-xs font-bold font-mono">
+                  <span>Discount:</span>
+                  <span>-₹{showPrint.discount}</span>
                 </div>
-              ))}
-            </div>
-            <div className="border-t-2 border-black border-dashed pt-6 flex justify-between items-end mb-8">
-              <span className="font-black text-xs uppercase tracking-[0.3em]">Grand Total</span>
-              <span className="font-black text-3xl tracking-tighter">₹{showPrint.totalAmount}</span>
+              )}
+              <div className="flex justify-between w-full pt-2 border-t border-black font-black font-mono">
+                <span className="text-sm uppercase tracking-widest">Grand Total:</span>
+                <span className="text-2xl tracking-tighter">₹{showPrint.totalAmount}</span>
+              </div>
             </div>
             <div className="bg-gray-100 p-6 rounded-2xl">
-              <p className="text-[11px] text-gray-900 font-black italic uppercase tracking-widest">Premium ERP Export</p>
-              <p className="text-[9px] text-gray-500 mt-2 font-bold leading-relaxed">Please retain this digital slip for all service queries. Thank you!</p>
+              <p className="text-[11px] text-gray-900 font-black italic uppercase tracking-widest text-center">Premium ERP Export</p>
+              <p className="text-[9px] text-gray-500 mt-2 font-bold leading-relaxed text-center">Please retain this digital slip for all service queries. Thank you!</p>
             </div>
           </div>
           <div className="flex flex-col gap-4 w-full max-w-xs no-print pb-20">
@@ -309,7 +377,7 @@ const BillingPage: React.FC<{ salesmanId: string; onComplete: () => void }> = ({
               <Printer className="h-6 w-6" />
               <span>Print Physical Slip</span>
             </button>
-            <button onClick={() => { setShowPrint(null); setCart([]); onComplete(); }} className="w-full bg-slate-100 text-slate-500 py-6 rounded-3xl font-black uppercase tracking-widest text-xs transition-all hover:bg-slate-200">Close Terminal</button>
+            <button onClick={() => { setShowPrint(null); setCart([]); setDiscount(0); onComplete(); }} className="w-full bg-slate-100 text-slate-500 py-6 rounded-3xl font-black uppercase tracking-widest text-xs transition-all hover:bg-slate-200">Close Terminal</button>
           </div>
         </div>
       )}
