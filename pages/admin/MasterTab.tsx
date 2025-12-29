@@ -31,7 +31,6 @@ const MasterTab: React.FC = () => {
 
     setStats({ totalRevenue: rev, totalKg: kg });
     
-    // Process last 7 days for chart
     const processedChart = Object.entries(dailyData)
       .slice(-7)
       .map(([date, value]) => ({ date, value }));
@@ -39,7 +38,7 @@ const MasterTab: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 animate-in fade-in duration-500">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-gradient-to-br from-blue-600 to-blue-800 p-8 rounded-3xl shadow-xl border border-blue-500/20">
           <div className="flex items-center justify-between mb-4">
@@ -64,7 +63,7 @@ const MasterTab: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl overflow-hidden min-h-[400px]">
+      <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl overflow-hidden min-h-[450px]">
         <div className="flex items-center justify-between mb-8">
           <div>
             <h3 className="text-xl font-bold text-white">Revenue Timeline</h3>
@@ -76,9 +75,9 @@ const MasterTab: React.FC = () => {
           </div>
         </div>
         
-        <div className="w-full h-[300px]">
+        <div className="w-full h-[350px]">
           {chartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%" minHeight={300}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={350}>
               <BarChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                 <XAxis dataKey="date" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />

@@ -49,7 +49,7 @@ const StockPage: React.FC = () => {
   }));
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 animate-in fade-in duration-500">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-1 bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl space-y-6">
           <div className="flex items-center space-x-3 mb-2">
@@ -121,7 +121,7 @@ const StockPage: React.FC = () => {
 
           <div className="w-full h-[350px]">
             {chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%" minHeight={350}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={350}>
                 <BarChart data={chartData} layout="vertical" margin={{ left: 20, right: 30, top: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={true} vertical={false} />
                   <XAxis type="number" stroke="#94a3b8" fontSize={12} axisLine={false} tickLine={false} />
