@@ -1,0 +1,5 @@
+{
+  "name": "AV Final 001 (Unified ERP System)",
+  "description": "A local-first ERP system for Admins and Salesmen featuring IndexedDB storage, dual-packet pricing, professional billing, and comprehensive backup tools.",
+  "requestFramePermissions": []
+}
