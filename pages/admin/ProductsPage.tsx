@@ -16,11 +16,11 @@ const ProductsPage: React.FC = () => {
     price05kg: 0,
     stockLevel: 0,
     image: '',
-    isDeleted: false
+    isDeleted: 0 // Default active
   });
 
   const loadProducts = async () => {
-    // Only fetch non-deleted products for UI
+    // Only fetch non-deleted products (isDeleted: 0)
     const all = await db.products.where('isDeleted').equals(0).toArray();
     setProducts(all);
   };
@@ -40,7 +40,7 @@ const ProductsPage: React.FC = () => {
           canvas.height = img.height * scale;
           const ctx = canvas.getContext('2d');
           ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-          resolve(canvas.toDataURL('image/webp', 0.6)); // WebP < 100kb
+          resolve(canvas.toDataURL('image/webp', 0.6));
         };
         img.src = e.target?.result as string;
       };
@@ -66,7 +66,7 @@ const ProductsPage: React.FC = () => {
         await db.products.add(formData);
         setIsAdding(false);
       }
-      setFormData({ name: '', price1kg: 0, price05kg: 0, stockLevel: 0, image: '', isDeleted: false });
+      setFormData({ name: '', price1kg: 0, price05kg: 0, stockLevel: 0, image: '', isDeleted: 0 });
       loadProducts();
     } catch (err) {
       alert("Failed to save product: " + err);
@@ -75,7 +75,7 @@ const ProductsPage: React.FC = () => {
 
   const handleSoftDelete = async (id: number) => {
     if (window.confirm('Mark this product as deleted? Historical invoices will remain accurate.')) {
-      await db.products.update(id, { isDeleted: true });
+      await db.products.update(id, { isDeleted: 1 });
       loadProducts();
     }
   };
@@ -131,7 +131,7 @@ const ProductsPage: React.FC = () => {
         </div>
       )}
 
-      <div className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden">
+      <div className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="bg-slate-900 border-b border-slate-700">
@@ -146,18 +146,18 @@ const ProductsPage: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-slate-700">
               {filtered.map(product => (
-                <tr key={product.id} className="hover:bg-slate-750">
+                <tr key={product.id} className="hover:bg-slate-750 transition-colors">
                   <td className="px-6 py-2">
                     {product.image ? <img src={product.image} className="h-10 w-10 rounded bg-slate-900" alt="" /> : <div className="h-10 w-10 bg-slate-900 rounded" />}
                   </td>
                   <td className="px-6 py-4 font-medium">{product.name}</td>
                   <td className="px-6 py-4">₹{product.price1kg}</td>
                   <td className="px-6 py-4">₹{product.price05kg}</td>
-                  <td className="px-6 py-4">{product.stockLevel}</td>
+                  <td className="px-6 py-4 font-bold">{product.stockLevel}</td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex justify-end space-x-2">
-                      <button onClick={() => { setEditingId(product.id!); setFormData({...product}); }} className="p-2 hover:bg-slate-700 rounded-lg"><Edit3 className="h-4 w-4" /></button>
-                      <button onClick={() => handleSoftDelete(product.id!)} className="p-2 hover:bg-red-500/10 text-red-500 rounded-lg"><Trash2 className="h-4 w-4" /></button>
+                      <button onClick={() => { setEditingId(product.id!); setFormData({...product}); }} className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-all"><Edit3 className="h-4 w-4" /></button>
+                      <button onClick={() => handleSoftDelete(product.id!)} className="p-2 hover:bg-red-500/10 text-red-500 rounded-lg transition-all"><Trash2 className="h-4 w-4" /></button>
                     </div>
                   </td>
                 </tr>

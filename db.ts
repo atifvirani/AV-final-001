@@ -1,5 +1,4 @@
 
-// Fix: Use named import for Dexie to ensure proper class inheritance in TypeScript
 import { Dexie, Table } from 'dexie';
 import { Product, Customer, Sale, StockLog, AppSettings } from './types';
 
@@ -12,8 +11,8 @@ export class ERPDatabase extends Dexie {
 
   constructor() {
     super('AVFinal001DB');
-    // Fix: Explicitly cast to any to ensure the 'version' method is correctly identified during construction
-    (this as any).version(2).stores({
+    // Bumped to v3 for numeric isDeleted flag indexing
+    (this as any).version(3).stores({
       products: '++id, name, isDeleted',
       customers: '++id, code, name, mobile',
       sales: '++id, invoiceNumber, customerCode, salesmanId, date, synced, syncId',

@@ -11,7 +11,7 @@ export interface Product {
   price05kg: number;
   stockLevel: number;
   image?: string; // Base64 WebP compressed
-  isDeleted?: boolean; // Soft deletion for record integrity
+  isDeleted: number; // 0 for active, 1 for deleted (standardized numeric flag)
 }
 
 export interface Customer {
