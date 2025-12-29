@@ -10,13 +10,12 @@ export interface Product {
   price1kg: number;
   price05kg: number;
   stockLevel: number;
-  image?: string; // Base64 WebP compressed
-  isDeleted: number; // 0 for active, 1 for deleted (standardized numeric flag)
+  isDeleted: number; // 0 for active, 1 for deleted
 }
 
 export interface Customer {
   id?: number;
-  code: string; // Unique identifier: Name+Address+Mobile
+  code: string;
   name: string;
   address: string;
   mobile: string;
@@ -41,7 +40,7 @@ export interface Sale {
   items: SaleItem[];
   totalAmount: number;
   synced: boolean;
-  syncId?: string; // For duplicate prevention on import
+  syncId?: string;
 }
 
 export interface StockLog {
