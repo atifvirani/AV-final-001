@@ -2,7 +2,26 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../db';
 import { Sale, Product, Customer } from '../types';
-import { PlusCircle, FileText, LayoutDashboard, LogOut, CheckCircle, Clock, History, RefreshCcw, Sun, Moon, Package, Users, Info, Printer } from 'lucide-react';
+import { 
+  LayoutDashboard, 
+  PlusCircle, 
+  History, 
+  Users, 
+  Package, 
+  LogOut, 
+  RefreshCcw, 
+  Download, 
+  Sun, 
+  Moon, 
+  CheckCircle, 
+  Clock, 
+  Info,
+  ArrowRight,
+  ShieldCheck,
+  // Added FileText and Printer imports to fix "Cannot find name" errors
+  FileText,
+  Printer
+} from 'lucide-react';
 import BillingPage from './sales/BillingPage';
 import AuthorFootnote from '../components/AuthorFootnote';
 
@@ -18,7 +37,6 @@ const SalesmanDashboard: React.FC<SalesmanDashboardProps> = ({ salesmanId, onLog
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [stats, setStats] = useState({ total: 0, count: 0, pending: 0 });
   const [reprintSale, setReprintSale] = useState<Sale | null>(null);
-  
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     return (localStorage.getItem('av_theme') as 'dark' | 'light') || 'dark';
   });
@@ -56,7 +74,7 @@ const SalesmanDashboard: React.FC<SalesmanDashboardProps> = ({ salesmanId, onLog
 
   const handleExportSync = async () => {
     const pendingSales = sales.filter(s => !s.synced);
-    if (pendingSales.length === 0) return alert('Nothing to export!');
+    if (pendingSales.length === 0) return alert('No pending sales to export.');
 
     const payload = {
       salesmanId,
@@ -71,12 +89,11 @@ const SalesmanDashboard: React.FC<SalesmanDashboardProps> = ({ salesmanId, onLog
     link.download = `SYNC_${salesmanId}_${new Date().toLocaleDateString().replace(/\//g, '-')}.json`;
     link.click();
     
-    // Explicitly update synced status in IndexedDB
     for (const sale of pendingSales) {
       await db.sales.update(sale.id!, { synced: true });
     }
     loadSales();
-    alert('Export successful! Share this file with the Manager.');
+    alert('Export Successful! Share the generated file with the Admin.');
   };
 
   const handleMasterImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -88,134 +105,129 @@ const SalesmanDashboard: React.FC<SalesmanDashboardProps> = ({ salesmanId, onLog
       try {
         const content = JSON.parse(event.target?.result as string);
         if (content.version === '2.0-AV') {
-          if (window.confirm('Refresh local Products and Customers from Manager backup? All local customer changes will be merged.')) {
+          if (window.confirm('Update local catalog and clients from Master Data?')) {
             await (db as any).transaction('rw', [db.products, db.customers], async () => {
-              // We don't clear customers to preserve newly registered ones, we bulkPut for updates
               await db.products.clear();
               await db.products.bulkPut(content.products || []);
               await db.customers.bulkPut(content.customers || []);
             });
-            alert('Data updated successfully!');
+            alert('System Data Synchronized.');
             loadSales();
           }
         } else {
-          alert('Invalid Master Clone file.');
+          alert('Invalid file format. Please use a valid Master Clone.');
         }
       } catch (err) {
-        alert('Failed to parse file: ' + err);
+        alert('Sync failed: ' + err);
       }
     };
     reader.readAsText(file);
     e.target.value = '';
   };
 
+  const sidebarItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'billing', label: 'Billing', icon: PlusCircle },
+    { id: 'history', label: 'Invoices', icon: History },
+    { id: 'customers', label: 'Customers', icon: Users },
+    { id: 'products', label: 'Products', icon: Package },
+  ];
+
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
         return (
-          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className={`${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-blue-50 border-blue-200'} border p-6 rounded-3xl shadow-sm transition-colors duration-300`}>
-                <div className={`${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'} text-xs font-black uppercase tracking-widest mb-1`}>Total Sales</div>
-                <div className={`text-3xl font-black ${theme === 'dark' ? 'text-white' : 'text-blue-900'}`}>₹{stats.total.toLocaleString()}</div>
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* Top Row: Summary Widgets */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className={`${theme === 'dark' ? 'bg-slate-800 border-slate-700 shadow-blue-900/10' : 'bg-white border-slate-200 shadow-slate-200/50'} border p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden group transition-all`}>
+                <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:scale-110 transition-transform">
+                  <CheckCircle className="h-20 w-20 text-blue-500" />
+                </div>
+                <div className={`${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'} text-xs font-black uppercase tracking-[0.2em] mb-2`}>Shift Revenue</div>
+                <div className={`text-4xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-900'} tracking-tighter`}>₹{stats.total.toLocaleString()}</div>
+                <div className="mt-4 flex items-center space-x-2">
+                   <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${stats.pending === 0 ? 'bg-green-500/10 text-green-500' : 'bg-orange-500/10 text-orange-500'}`}>
+                     {stats.pending === 0 ? 'Synced' : `${stats.pending} Pending`}
+                   </div>
+                </div>
               </div>
-              <div className={`${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-green-50 border-green-200'} border p-6 rounded-3xl shadow-sm transition-colors duration-300`}>
-                <div className={`${theme === 'dark' ? 'text-green-400' : 'text-green-600'} text-xs font-black uppercase tracking-widest mb-1`}>Bills Issued</div>
-                <div className={`text-3xl font-black ${theme === 'dark' ? 'text-green-900' : 'text-green-900'}`}>{stats.count}</div>
+
+              <div className={`${theme === 'dark' ? 'bg-slate-800 border-slate-700 shadow-indigo-900/10' : 'bg-white border-slate-200 shadow-slate-200/50'} border p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden group transition-all`}>
+                <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:scale-110 transition-transform">
+                  <FileText className="h-20 w-20 text-indigo-500" />
+                </div>
+                <div className={`${theme === 'dark' ? 'text-indigo-400' : 'text-indigo-600'} text-xs font-black uppercase tracking-[0.2em] mb-2`}>Invoices Issued</div>
+                <div className={`text-4xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-900'} tracking-tighter`}>{stats.count}</div>
+                <p className="text-xs text-slate-500 mt-4 font-bold uppercase tracking-widest">Active Shift Terminal</p>
               </div>
             </div>
 
-            <div className={`p-6 rounded-3xl border flex items-center justify-between transition-all duration-300 ${stats.pending > 0 ? (theme === 'dark' ? 'bg-orange-900/20 border-orange-500/50' : 'bg-orange-50 border-orange-200') : (theme === 'dark' ? 'bg-green-900/20 border-green-500/50' : 'bg-green-50 border-green-200')}`}>
-              <div className="flex items-center space-x-4">
-                <div className={`w-14 h-14 rounded-full flex items-center justify-center ${stats.pending > 0 ? 'bg-orange-500 shadow-orange-500/30 shadow-lg' : 'bg-green-500 shadow-green-500/30 shadow-lg'} text-white`}>
-                  {stats.pending > 0 ? <Clock className="h-7 w-7" /> : <CheckCircle className="h-7 w-7" />}
+            {/* Middle Zone: Satellite Data Hub */}
+            <div className={`${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-100 border-slate-200'} border p-10 rounded-[3rem] shadow-inner`}>
+              <div className="flex items-center space-x-3 mb-8">
+                <RefreshCcw className="h-6 w-6 text-blue-500 animate-spin-slow" />
+                <h3 className={`text-xl font-black uppercase tracking-widest ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Satellite Data Hub</h3>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Import Box */}
+                <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'} border p-8 rounded-[2rem] shadow-xl group hover:border-blue-500/50 transition-all`}>
+                  <div className="flex items-start justify-between mb-6">
+                    <div className="p-4 bg-blue-500/10 rounded-2xl">
+                      <RefreshCcw className="h-8 w-8 text-blue-500" />
+                    </div>
+                    <ArrowRight className="h-6 w-6 text-slate-700 opacity-0 group-hover:opacity-100 transition-all -translate-x-4 group-hover:translate-x-0" />
+                  </div>
+                  <h4 className="font-black text-lg mb-2">Import Hub</h4>
+                  <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-6 leading-relaxed">Update Inventory & Customers from Manager Clone</p>
+                  <input type="file" id="master-sync" className="hidden" onChange={handleMasterImport} accept=".json" />
+                  <label htmlFor="master-sync" className="block w-full text-center bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] cursor-pointer shadow-lg active:scale-95 transition-all">
+                    Update Data
+                  </label>
                 </div>
-                <div>
-                  <div className={`text-lg font-black ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>{stats.pending > 0 ? `${stats.pending} Bills Pending Export` : 'System Synchronized'}</div>
-                  <div className={`text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>{stats.pending > 0 ? 'Manager needs your report' : 'Ready for duty'}</div>
+
+                {/* Export Box */}
+                <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'} border p-8 rounded-[2rem] shadow-xl group hover:border-orange-500/50 transition-all`}>
+                  <div className="flex items-start justify-between mb-6">
+                    <div className="p-4 bg-orange-500/10 rounded-2xl">
+                      <Download className="h-8 w-8 text-orange-500" />
+                    </div>
+                    <ArrowRight className="h-6 w-6 text-slate-700 opacity-0 group-hover:opacity-100 transition-all -translate-x-4 group-hover:translate-x-0" />
+                  </div>
+                  <h4 className="font-black text-lg mb-2">Export Hub</h4>
+                  <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-6 leading-relaxed">Generate Sync File for Manager Daily Submission</p>
+                  <button onClick={handleExportSync} className="w-full bg-orange-600 hover:bg-orange-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all">
+                    Export Sales
+                  </button>
                 </div>
               </div>
-              {stats.pending > 0 && (
-                <button onClick={handleExportSync} className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-2xl font-black transition-all shadow-xl shadow-orange-900/20 uppercase tracking-widest text-xs">
-                  Export
-                </button>
-              )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <button onClick={() => setActiveTab('products')} className={`${theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-gray-200 hover:bg-gray-50'} border p-8 rounded-[2.5rem] flex flex-col items-center space-y-3 transition-all active:scale-95 shadow-sm`}>
-                <Package className="h-10 w-10 text-blue-500" />
-                <span className="font-black text-[10px] uppercase tracking-[0.2em] text-slate-500">Inventory</span>
-              </button>
-              <button onClick={() => setActiveTab('customers')} className={`${theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-gray-200 hover:bg-gray-50'} border p-8 rounded-[2.5rem] flex flex-col items-center space-y-3 transition-all active:scale-95 shadow-sm`}>
-                <Users className="h-10 w-10 text-indigo-500" />
-                <span className="font-black text-[10px] uppercase tracking-[0.2em] text-slate-500">Clientele</span>
-              </button>
+            {/* Bottom: Sync Status Bar */}
+            <div className={`flex items-center justify-between p-6 rounded-3xl border ${stats.pending > 0 ? 'bg-orange-500/5 border-orange-500/20' : 'bg-green-500/5 border-green-500/20'}`}>
+               <div className="flex items-center space-x-3">
+                  <div className={`w-3 h-3 rounded-full ${stats.pending > 0 ? 'bg-orange-500 animate-pulse' : 'bg-green-500'}`} />
+                  <span className={`text-[10px] font-black uppercase tracking-[0.3em] ${stats.pending > 0 ? 'text-orange-500' : 'text-green-500'}`}>
+                    {stats.pending > 0 ? 'UNSYNCED DATA DETECTED' : 'SYSTEM FULLY SYNCHRONIZED'}
+                  </span>
+               </div>
+               <ShieldCheck className={`h-5 w-5 ${stats.pending > 0 ? 'text-orange-300' : 'text-green-300'}`} />
             </div>
-          </div>
-        );
-      case 'products':
-        return (
-          <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
-             <div className="flex justify-between items-center mb-6">
-                <h3 className="text-2xl font-black">Stock Catalog</h3>
-                <button onClick={() => setActiveTab('dashboard')} className="px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-xl text-blue-500 font-bold text-xs uppercase tracking-widest">Back</button>
-             </div>
-             <div className="space-y-3">
-                {products.map(p => (
-                  <div key={p.id} className={`${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'} border p-6 rounded-3xl flex justify-between items-center shadow-sm`}>
-                    <div>
-                      <p className="font-black text-xl text-blue-500">{p.name}</p>
-                      <div className="flex gap-3 mt-1">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">1KG: ₹{p.price1kg}</span>
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">0.5KG: ₹{p.price05kg}</span>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-slate-400 font-black text-2xl">{p.stockLevel}</p>
-                      <p className="text-[9px] uppercase font-black text-slate-500 tracking-[0.1em]">Remaining</p>
-                    </div>
-                  </div>
-                ))}
-                {products.length === 0 && <p className="text-center text-slate-500 italic py-12">No products loaded.</p>}
-             </div>
-          </div>
-        );
-      case 'customers':
-        return (
-          <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
-             <div className="flex justify-between items-center mb-6">
-                <h3 className="text-2xl font-black">Client Records</h3>
-                <button onClick={() => setActiveTab('dashboard')} className="px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-xl text-blue-500 font-bold text-xs uppercase tracking-widest">Back</button>
-             </div>
-             <div className="space-y-3">
-                {customers.map(c => (
-                  <div key={c.id} className={`${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'} border p-6 rounded-3xl shadow-sm`}>
-                      <p className="font-black text-xl">{c.name}</p>
-                      <div className="flex items-center space-x-2 text-xs text-slate-500 mt-1">
-                        <span className="font-bold">{c.mobile}</span>
-                        <span>•</span>
-                        <span className="opacity-80 italic">{c.address}</span>
-                      </div>
-                      <p className="text-[10px] mt-3 font-mono text-blue-500/60 uppercase tracking-tighter">Code: {c.code}</p>
-                  </div>
-                ))}
-                {customers.length === 0 && <p className="text-center text-slate-500 italic py-12">Customer directory empty.</p>}
-             </div>
           </div>
         );
       case 'billing':
         return <BillingPage salesmanId={salesmanId} onComplete={() => setActiveTab('dashboard')} />;
       case 'history':
         return (
-          <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
-            <h3 className={`text-2xl font-black ${theme === 'dark' ? 'text-white' : 'text-blue-900'} mb-6`}>Transaction Archive</h3>
+          <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-500">
+            <h3 className="text-2xl font-black mb-6">Invoice Archive</h3>
             <div className="space-y-3">
               {sales.map(sale => (
                 <button 
                   key={sale.id} 
                   onClick={() => setReprintSale(sale)}
-                  className={`w-full text-left ${theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-750' : 'bg-white border-gray-100 hover:bg-gray-50 shadow-sm'} border p-6 rounded-3xl flex justify-between items-center active:scale-[0.98] transition-all`}
+                  className={`w-full text-left ${theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-750' : 'bg-white border-slate-200 hover:bg-slate-50'} border p-6 rounded-3xl flex justify-between items-center transition-all active:scale-[0.98] shadow-sm`}
                 >
                    <div>
                       <p className="font-black text-lg">{sale.customerName}</p>
@@ -227,41 +239,71 @@ const SalesmanDashboard: React.FC<SalesmanDashboardProps> = ({ salesmanId, onLog
                    </div>
                    <div className="text-right">
                      <p className="font-black text-blue-600 text-xl tracking-tighter">₹{sale.totalAmount}</p>
-                     <Printer className="h-4 w-4 text-slate-400 mt-1 ml-auto" />
+                     <p className={`text-[8px] font-black uppercase tracking-widest mt-1 ${sale.synced ? 'text-green-500' : 'text-orange-500'}`}>
+                       {sale.synced ? 'Reported' : 'Pending'}
+                     </p>
                    </div>
                 </button>
               ))}
-              {sales.length === 0 && <p className="text-center text-slate-500 italic py-20">No local transaction history found.</p>}
+              {sales.length === 0 && <p className="text-center text-slate-500 italic py-20 font-bold uppercase text-[10px] tracking-widest">No local records found</p>}
             </div>
           </div>
         );
-      case 'update':
+      case 'customers':
         return (
-          <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-            <h3 className={`text-2xl font-black ${theme === 'dark' ? 'text-white' : 'text-blue-900'} mb-6`}>Satellite Data Hub</h3>
-            <div className={`${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'} border p-12 rounded-[3rem] text-center shadow-2xl space-y-10`}>
-               <div className="relative">
-                  <div className="p-4 bg-blue-500/10 rounded-3xl inline-block mb-4">
-                    <RefreshCcw className="h-10 w-10 text-blue-500" />
+          <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
+             <div className="flex justify-between items-center mb-6">
+                <h3 className="text-2xl font-black">Client Directory</h3>
+                <button onClick={() => setActiveTab('billing')} className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all">
+                  Register Client
+                </button>
+             </div>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {customers.map(c => (
+                  <div key={c.id} className={`${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border p-6 rounded-3xl shadow-sm`}>
+                      <p className="font-black text-lg">{c.name}</p>
+                      <div className="flex items-center space-x-2 text-xs text-slate-500 mt-1">
+                        <span className="font-bold">{c.mobile}</span>
+                        <span>•</span>
+                        <span className="opacity-80 italic">{c.address}</span>
+                      </div>
+                      <div className="mt-4 pt-4 border-t border-slate-700/10">
+                        <p className="text-[10px] font-mono text-blue-500 font-bold uppercase tracking-tighter">Registry ID: {c.code}</p>
+                      </div>
                   </div>
-                  <h4 className="font-black text-blue-500 uppercase tracking-[0.2em] text-[10px] mb-4">Manager Data Refresh</h4>
-                  <input type="file" id="master-sync" className="hidden" onChange={handleMasterImport} accept=".json" />
-                  <label htmlFor="master-sync" className="bg-blue-600 text-white px-10 py-5 rounded-[2rem] font-black cursor-pointer shadow-xl hover:bg-blue-700 transition-all inline-block w-full uppercase tracking-widest text-sm active:scale-95">
-                     Update Inventory/Customers
-                  </label>
-                  <p className="text-[10px] text-slate-500 mt-3 italic">Use AV_MASTER_CLONE file</p>
-               </div>
-               <div className="border-t border-slate-700/20 pt-10">
-                  <div className="p-4 bg-orange-500/10 rounded-3xl inline-block mb-4">
-                    <RefreshCcw className="h-10 w-10 text-orange-500" />
+                ))}
+                {customers.length === 0 && <p className="col-span-full text-center text-slate-500 italic py-12">No registered customers.</p>}
+             </div>
+          </div>
+        );
+      case 'products':
+        return (
+          <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-500">
+             <h3 className="text-2xl font-black mb-6">Live Catalog</h3>
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {products.map(p => (
+                  <div key={p.id} className={`${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border p-6 rounded-3xl flex flex-col justify-between shadow-sm`}>
+                    <div>
+                      <p className="font-black text-xl text-blue-500 mb-2">{p.name}</p>
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                          <span>1KG Pack</span>
+                          <span className="text-slate-900 dark:text-white">₹{p.price1kg}</span>
+                        </div>
+                        <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                          <span>0.5KG Pack</span>
+                          <span className="text-slate-900 dark:text-white">₹{p.price05kg}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-6 pt-4 border-t border-slate-700/10 flex justify-between items-end">
+                      <span className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Available Volume</span>
+                      <p className="text-2xl font-black text-slate-800 dark:text-white leading-none">{p.stockLevel}</p>
+                    </div>
                   </div>
-                  <h4 className="font-black text-orange-500 uppercase tracking-[0.2em] text-[10px] mb-4">Daily Sales Submission</h4>
-                  <button onClick={handleExportSync} className="bg-orange-600 text-white px-10 py-5 rounded-[2rem] font-black shadow-xl hover:bg-orange-700 transition-all inline-block w-full uppercase tracking-widest text-sm active:scale-95">
-                     Export My Daily Sales
-                  </button>
-                  <p className="text-[10px] text-slate-500 mt-3 italic">Generates report for Manager</p>
-               </div>
-            </div>
+                ))}
+                {products.length === 0 && <p className="col-span-full text-center text-slate-500 italic py-12">Catalog is empty.</p>}
+             </div>
           </div>
         );
       default: return null;
@@ -269,69 +311,96 @@ const SalesmanDashboard: React.FC<SalesmanDashboardProps> = ({ salesmanId, onLog
   };
 
   return (
-    <div className={`min-h-screen ${theme === 'dark' ? 'bg-slate-900 text-slate-100' : 'bg-gray-50 text-gray-900'} flex flex-col transition-colors duration-300`}>
-      <header className="bg-blue-600 text-white p-6 sticky top-0 z-20 shadow-lg rounded-b-[2rem]">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="bg-white/20 p-2.5 rounded-2xl backdrop-blur-md border border-white/10">
-              <FileText className="h-6 w-6" />
-            </div>
-            <div>
-              <h1 className="text-xl font-black tracking-tight">Terminal {salesmanId}</h1>
-              <p className="text-[10px] text-blue-100 font-black opacity-80 uppercase tracking-[0.3em]">Operational</p>
-            </div>
-          </div>
-          <div className="flex items-center space-x-2">
-            <button onClick={toggleTheme} className="p-3 bg-white/10 hover:bg-white/20 rounded-2xl transition-all border border-white/5">
-              {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-            </button>
-            <button onClick={onLogout} className="p-3 bg-white/10 hover:bg-white/20 rounded-2xl transition-all border border-white/5">
-              <LogOut className="h-6 w-6" />
-            </button>
-          </div>
+    <div className={`min-h-screen ${theme === 'dark' ? 'bg-slate-900 text-slate-100' : 'bg-gray-50 text-gray-900'} flex transition-colors duration-300`}>
+      {/* PERSISTENT SIDEBAR - Professional Terminal Look */}
+      <aside className={`fixed inset-y-0 left-0 w-24 md:w-28 ${theme === 'dark' ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-200 shadow-2xl shadow-slate-200'} border-r z-50 flex flex-col items-center py-10 transition-colors`}>
+        {/* LOGO */}
+        <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center font-black text-white text-2xl shadow-xl shadow-blue-500/20 mb-12">
+          AV
         </div>
-      </header>
 
-      <main className="flex-1 p-6 pb-36 max-w-2xl mx-auto w-full">
-        {renderContent()}
+        {/* NAV ITEMS */}
+        <nav className="flex-1 w-full space-y-4 px-3">
+          {sidebarItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id)}
+              className={`w-full flex flex-col items-center justify-center p-4 rounded-2xl transition-all group ${
+                activeTab === item.id 
+                  ? 'bg-blue-600 text-white shadow-xl shadow-blue-500/30' 
+                  : 'text-slate-500 hover:bg-slate-500/5'
+              }`}
+            >
+              <item.icon className={`h-6 w-6 ${activeTab === item.id ? 'scale-110' : 'group-hover:scale-110'} transition-transform`} />
+              <span className="text-[8px] font-black uppercase tracking-widest mt-2 hidden md:block">
+                {item.label}
+              </span>
+            </button>
+          ))}
+        </nav>
+
+        {/* BOTTOM CONTROLS */}
+        <div className="mt-auto space-y-4 px-3 w-full">
+          <button 
+            onClick={toggleTheme}
+            className={`w-full flex items-center justify-center p-4 rounded-2xl transition-all ${theme === 'dark' ? 'text-yellow-400 bg-yellow-400/5 hover:bg-yellow-400/10' : 'text-slate-400 bg-slate-100 hover:bg-slate-200'}`}
+          >
+            {theme === 'dark' ? <Sun className="h-6 w-6" /> : <Moon className="h-6 w-6" />}
+          </button>
+          <button 
+            onClick={onLogout}
+            className="w-full flex items-center justify-center p-4 rounded-2xl text-red-400 hover:bg-red-400/10 transition-all"
+          >
+            <LogOut className="h-6 w-6" />
+          </button>
+        </div>
+      </aside>
+
+      {/* MAIN VIEWPORT */}
+      <main className="flex-1 ml-24 md:ml-28 p-8 md:p-12 relative overflow-y-auto min-h-screen">
+        <header className="mb-12 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div>
+            <div className="flex items-center space-x-3 mb-2">
+              <span className="text-xs font-black uppercase tracking-[0.4em] text-blue-500">Sales Operational Terminal</span>
+              <div className="h-1 w-12 bg-blue-500 rounded-full" />
+            </div>
+            <h2 className="text-4xl font-black capitalize tracking-tight">{activeTab.replace('-', ' ')}</h2>
+          </div>
+          <div className={`p-4 rounded-3xl border flex items-center space-x-4 ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-200 shadow-sm'}`}>
+            <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-900 flex items-center justify-center border border-slate-200 dark:border-slate-800">
+               <span className="text-blue-500 font-black text-xs">{salesmanId}</span>
+            </div>
+            <div className="hidden sm:block">
+               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">Status: Online</p>
+               <p className="text-xs font-bold leading-none">Shift Active</p>
+            </div>
+          </div>
+        </header>
+
+        <div className="max-w-6xl">
+          {renderContent()}
+        </div>
+
+        <AuthorFootnote />
       </main>
 
-      <nav className={`fixed bottom-0 inset-x-0 ${theme === 'dark' ? 'bg-slate-950 border-slate-800' : 'bg-white border-gray-200 shadow-[0_-10px_40px_rgba(0,0,0,0.1)]'} border-t px-8 py-5 flex justify-between items-center z-30 rounded-t-[3rem] transition-colors duration-300`}>
-        <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center space-y-1 transition-all ${activeTab === 'dashboard' ? 'text-blue-600' : 'text-slate-400'}`}>
-          <LayoutDashboard className="h-6 w-6" /><span className="text-[9px] font-black uppercase tracking-widest">Home</span>
-        </button>
-        <button onClick={() => setActiveTab('history')} className={`flex flex-col items-center space-y-1 transition-all ${activeTab === 'history' ? 'text-blue-600' : 'text-slate-400'}`}>
-          <History className="h-6 w-6" /><span className="text-[9px] font-black uppercase tracking-widest">Archive</span>
-        </button>
-        
-        <div className="relative -mt-16">
-          <button onClick={() => setActiveTab('billing')} className="bg-blue-600 text-white p-5 rounded-full shadow-2xl shadow-blue-400 ring-[10px] ring-gray-50 dark:ring-slate-900 hover:bg-blue-700 transition-all active:scale-95"><PlusCircle className="h-10 w-10" /></button>
-          {stats.pending > 0 && <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-[8px] font-black px-2 py-1 rounded-full border-2 border-white dark:border-slate-900">{stats.pending}</span>}
-        </div>
-
-        <button onClick={() => setActiveTab('update')} className={`flex flex-col items-center space-y-1 transition-all ${activeTab === 'update' ? 'text-blue-600' : 'text-slate-400'}`}>
-          <RefreshCcw className="h-6 w-6" /><span className="text-[9px] font-black uppercase tracking-widest">Hub</span>
-        </button>
-        <button onClick={() => setActiveTab('history')} className="opacity-0 w-6 h-6" disabled />
-      </nav>
-
-      <AuthorFootnote />
-
+      {/* REPRINT MODAL (SALESMAN ARCHIVE RE-TRIGGER) */}
       {reprintSale && (
-        <div className="fixed inset-0 bg-white z-[300] flex flex-col items-center p-12 overflow-y-auto animate-in zoom-in-95 duration-300">
+        <div className="fixed inset-0 bg-white dark:bg-slate-900 z-[300] flex flex-col items-center p-12 overflow-y-auto animate-in zoom-in-95 duration-300">
           <div id="thermal-receipt" className="p-8 bg-white text-black text-center w-[80mm] mx-auto border border-slate-200 shadow-2xl mb-10 rounded-xl">
              <h1 className="text-3xl font-black mb-1 uppercase tracking-tighter">AV STORE</h1>
-             <p className="text-[11px] mb-6 font-bold uppercase tracking-widest text-gray-600">DUPLICATE RECEIPT</p>
-             <div className="text-left text-[12px] space-y-2 mb-6 border-t border-b border-black border-dashed py-4 font-mono">
-                <div className="flex justify-between"><span>INV:</span> <b>#{reprintSale.invoiceNumber}</b></div>
+             <p className="text-[11px] mb-6 font-bold uppercase tracking-widest text-gray-600 font-sans">Professional ERP Output</p>
+             <div className="text-left text-[12px] space-y-2 mb-6 border-t border-b border-black border-dashed py-4 font-mono font-bold">
+                <div className="flex justify-between"><span>INV NO:</span> <b>#{reprintSale.invoiceNumber}</b></div>
                 <div className="flex justify-between"><span>DATE:</span> <span>{new Date(reprintSale.date).toLocaleString()}</span></div>
-                <div className="flex justify-between"><span>CUST:</span> <b>{reprintSale.customerName}</b></div>
+                <div className="flex justify-between"><span>TERMINAL:</span> <span>{reprintSale.salesmanId}</span></div>
+                <div className="flex justify-between"><span>CLIENT:</span> <b>{reprintSale.customerName}</b></div>
              </div>
              <div className="text-left text-[12px] space-y-3 mb-6 font-mono">
                {reprintSale.items.map((it, i) => (
-                 <div key={i} className="flex justify-between items-start border-b border-gray-100 pb-1 last:border-0">
-                    <span className="flex-1 font-bold">{it.productName} ({it.type}) x{it.quantity}</span>
-                    <span className="ml-4 font-black">₹{it.total}</span>
+                 <div key={i} className="flex justify-between items-start border-b border-gray-100 pb-1 last:border-0 font-bold">
+                    <span className="flex-1">{it.productName} ({it.type}) x{it.quantity}</span>
+                    <span className="ml-4">₹{it.total}</span>
                  </div>
                ))}
              </div>
@@ -339,14 +408,18 @@ const SalesmanDashboard: React.FC<SalesmanDashboardProps> = ({ salesmanId, onLog
                 <span className="font-black text-sm uppercase tracking-widest">GRAND TOTAL</span>
                 <span className="font-black text-2xl tracking-tighter">₹{reprintSale.totalAmount}</span>
              </div>
+             <p className="text-[9px] text-gray-500 italic font-bold">Thank you for your business. (Archive Copy)</p>
           </div>
           <div className="flex flex-col gap-4 w-full max-w-xs no-print">
              <div className="p-5 bg-blue-50 border border-blue-200 rounded-3xl flex items-start space-x-4 mb-2">
                 <Info className="h-5 w-5 text-blue-600 shrink-0 mt-1" />
                 <p className="text-[10px] text-blue-800 font-bold uppercase tracking-widest leading-relaxed">To download: Select 'Save as PDF' as the Destination in the print dialog.</p>
              </div>
-             <button onClick={() => window.print()} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-lg shadow-2xl shadow-blue-200 transition-all active:scale-95">PRINT PHYSICAL SLIP</button>
-             <button onClick={() => setReprintSale(null)} className="w-full bg-slate-100 text-slate-600 py-5 rounded-2xl font-black text-sm uppercase tracking-widest transition-all">Close Archive</button>
+             <button onClick={() => window.print()} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-lg shadow-2xl shadow-blue-200 transition-all active:scale-95 flex items-center justify-center space-x-3">
+               <Printer className="h-6 w-6" />
+               <span>Re-Print Receipt</span>
+             </button>
+             <button onClick={() => setReprintSale(null)} className="w-full bg-slate-100 dark:bg-slate-800 text-slate-500 py-5 rounded-2xl font-black text-sm uppercase tracking-widest transition-all">Close Archive</button>
           </div>
         </div>
       )}
