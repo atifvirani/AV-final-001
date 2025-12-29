@@ -71,7 +71,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                     value={salesmanId}
                     onChange={(e) => setSalesmanId(e.target.value)}
                     placeholder="e.g. A"
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                     required
                   />
                 </div>
@@ -82,11 +82,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 <div className="relative">
                   <Lock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
                   <input
-                    type="1"
+                    type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                     required
                   />
                 </div>

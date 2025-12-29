@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../db';
 import { Customer, Product, SaleItem, Sale } from '../../types';
-import { Search, Plus, UserPlus, ShoppingCart, Trash2, Printer, X } from 'lucide-react';
+import { Search, Plus, UserPlus, ShoppingCart, Trash2, Printer, X, Delete } from 'lucide-react';
 
 const BillingPage: React.FC<{ salesmanId: string; onComplete: () => void }> = ({ salesmanId, onComplete }) => {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -17,28 +17,60 @@ const BillingPage: React.FC<{ salesmanId: string; onComplete: () => void }> = ({
   const [custSearch, setCustSearch] = useState('');
   const [prodSearch, setProdSearch] = useState('');
 
+  // Num-Pad State
+  const [showNumPad, setShowNumPad] = useState(false);
+  const [numpadValue, setNumpadValue] = useState('');
+  const [pendingSelection, setPendingSelection] = useState<{product: Product, type: '1kg' | '0.5kg'} | null>(null);
+
   useEffect(() => {
     db.customers.toArray().then(setCustomers);
     db.products.where('isDeleted').equals(0).toArray().then(setProducts);
   }, []);
 
-  const addToCart = (product: Product, type: '1kg' | '0.5kg') => {
+  const openNumPad = (product: Product, type: '1kg' | '0.5kg') => {
+    setPendingSelection({ product, type });
+    setNumpadValue('');
+    setShowNumPad(true);
+  };
+
+  const handleNumPadPress = (val: string) => {
+    if (numpadValue.length < 4) {
+      setNumpadValue(prev => prev + val);
+    }
+  };
+
+  const confirmQuantity = () => {
+    if (!pendingSelection || !numpadValue) return;
+    const qty = parseInt(numpadValue);
+    if (qty <= 0) return;
+
+    const { product, type } = pendingSelection;
     const price = type === '1kg' ? product.price1kg : product.price05kg;
+
     setCart(prev => {
       const idx = prev.findIndex(i => i.productId === product.id && i.type === type);
       if (idx > -1) {
         const nc = [...prev];
-        nc[idx].quantity += 1;
+        nc[idx].quantity += qty;
         nc[idx].total = nc[idx].quantity * price;
         return nc;
       }
-      return [...prev, { productId: product.id!, productName: product.name, type, quantity: 1, price, total: price }];
+      return [...prev, { 
+        productId: product.id!, 
+        productName: product.name, 
+        type, 
+        quantity: qty, 
+        price, 
+        total: qty * price 
+      }];
     });
+
+    setShowNumPad(false);
     setShowProductSearch(false);
+    setPendingSelection(null);
   };
 
   const getBaseInvoice = (id: string) => {
-    // Generate unique base range: A=10000, B=20000, etc.
     const charCode = id.toUpperCase().charCodeAt(0);
     return (charCode - 64) * 10000;
   };
@@ -70,9 +102,7 @@ const BillingPage: React.FC<{ salesmanId: string; onComplete: () => void }> = ({
         for (const item of cart) {
           const p = await db.products.get(item.productId);
           if (p) {
-            // Update Stock
             await db.products.update(item.productId, { stockLevel: p.stockLevel - item.quantity });
-            // Add Stock Audit Log
             await db.stockLogs.add({
               productId: item.productId,
               productName: item.productName,
@@ -91,7 +121,7 @@ const BillingPage: React.FC<{ salesmanId: string; onComplete: () => void }> = ({
   };
 
   return (
-    <div className="bg-white min-h-[85vh] rounded-3xl p-6 shadow-xl flex flex-col space-y-6 relative overflow-hidden">
+    <div className="bg-white min-h-[85vh] rounded-3xl p-6 shadow-xl flex flex-col space-y-6 relative overflow-hidden text-gray-900">
       <style>{`
         @media print {
           body * { visibility: hidden; }
@@ -129,7 +159,7 @@ const BillingPage: React.FC<{ salesmanId: string; onComplete: () => void }> = ({
             <input 
               type="text" 
               placeholder="Search Customer..." 
-              className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
               value={custSearch}
               onChange={e => setCustSearch(e.target.value)}
             />
@@ -185,17 +215,53 @@ const BillingPage: React.FC<{ salesmanId: string; onComplete: () => void }> = ({
               <h3 className="font-black text-xl text-slate-800">Choose Product</h3>
               <button onClick={() => setShowProductSearch(false)}><X className="h-6 w-6 text-slate-400"/></button>
             </div>
-            <input type="text" placeholder="Filter by name..." className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl mb-4 outline-none focus:ring-2 focus:ring-blue-500" value={prodSearch} onChange={e => setProdSearch(e.target.value)} />
+            <input type="text" placeholder="Filter by name..." className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl mb-4 outline-none focus:ring-2 focus:ring-blue-500 text-gray-900" value={prodSearch} onChange={e => setProdSearch(e.target.value)} />
             <div className="flex-1 overflow-y-auto space-y-3 pr-1">
               {products.filter(p => p.name.toLowerCase().includes(prodSearch.toLowerCase())).map(p => (
                 <div key={p.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
                   <p className="font-bold text-slate-800 mb-3">{p.name}</p>
                   <div className="flex gap-2">
-                    <button onClick={() => addToCart(p, '1kg')} className="flex-1 py-3 bg-white rounded-xl text-xs font-bold border border-slate-200 shadow-sm active:bg-blue-50">1kg @ ₹{p.price1kg}</button>
-                    <button onClick={() => addToCart(p, '0.5kg')} className="flex-1 py-3 bg-white rounded-xl text-xs font-bold border border-slate-200 shadow-sm active:bg-blue-50">0.5kg @ ₹{p.price05kg}</button>
+                    <button onClick={() => openNumPad(p, '1kg')} className="flex-1 py-3 bg-white rounded-xl text-xs font-bold border border-slate-200 shadow-sm active:bg-blue-50">1kg @ ₹{p.price1kg}</button>
+                    <button onClick={() => openNumPad(p, '0.5kg')} className="flex-1 py-3 bg-white rounded-xl text-xs font-bold border border-slate-200 shadow-sm active:bg-blue-50">0.5kg @ ₹{p.price05kg}</button>
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showNumPad && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[300] flex items-center justify-center p-6">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 space-y-6 shadow-2xl text-center">
+            <h3 className="text-xl font-black text-slate-800">Enter Quantity</h3>
+            <p className="text-slate-500 font-medium">Selected: {pendingSelection?.product.name} ({pendingSelection?.type})</p>
+            
+            <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+               <span className="text-5xl font-black text-blue-600">{numpadValue || '0'}</span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              {['1','2','3','4','5','6','7','8','9','0'].map(num => (
+                <button 
+                  key={num} 
+                  onClick={() => handleNumPadPress(num)} 
+                  className={`py-4 rounded-2xl font-black text-xl border transition-all active:scale-90 ${num === '0' ? 'col-span-2' : ''} bg-white text-slate-700 hover:bg-slate-50 border-slate-100 shadow-sm`}
+                >
+                  {num}
+                </button>
+              ))}
+              <button 
+                onClick={() => setNumpadValue(prev => prev.slice(0, -1))} 
+                className="py-4 bg-red-50 text-red-500 rounded-2xl font-black text-xl border border-red-100 flex items-center justify-center active:scale-90"
+              >
+                <Delete className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="flex gap-3 pt-4">
+              <button onClick={() => setShowNumPad(false)} className="flex-1 py-4 font-bold text-slate-400">Cancel</button>
+              <button onClick={confirmQuantity} className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black shadow-xl active:scale-95">Confirm</button>
             </div>
           </div>
         </div>
@@ -238,9 +304,9 @@ const BillingPage: React.FC<{ salesmanId: string; onComplete: () => void }> = ({
             <h3 className="font-black text-2xl text-slate-800">Customer Registration</h3>
             <p className="text-slate-400 text-sm">Add a new buyer to the local database.</p>
             <div className="space-y-4 pt-2">
-              <input type="text" placeholder="Full Name" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl" onChange={e => setNewCust({...newCust, name: e.target.value})} />
-              <input type="text" placeholder="Mobile Number" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl" onChange={e => setNewCust({...newCust, mobile: e.target.value})} />
-              <input type="text" placeholder="Detailed Address" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl" onChange={e => setNewCust({...newCust, address: e.target.value})} />
+              <input type="text" placeholder="Full Name" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-gray-900" onChange={e => setNewCust({...newCust, name: e.target.value})} />
+              <input type="text" placeholder="Mobile Number" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-gray-900" onChange={e => setNewCust({...newCust, mobile: e.target.value})} />
+              <input type="text" placeholder="Detailed Address" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-gray-900" onChange={e => setNewCust({...newCust, address: e.target.value})} />
             </div>
             <div className="flex gap-2 pt-6">
               <button onClick={() => setIsRegistering(false)} className="flex-1 py-4 font-bold text-slate-400">Cancel</button>
